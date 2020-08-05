@@ -1,0 +1,32 @@
+sshtools
+  
+   Introduction:
+       sshtools tool is mainly used to check the ssh service of remote machines,and perform 
+   ssh secret-free operation on remote machines,at present, this tool supports single machine
+   and multiple machines
+    
+
+   Usage(example):
+   A) check single remote machines`s ssh service status:
+      sshtools -u xx -i yy -p zz --check-single-ssh-open
+   B) check more remote machines`s ssh service status:
+      sshtools --check-more-ssh-open
+   C) Suggest ssh password-free connect with the single remote machin
+      sshtools -u xx -i yy -p zz --single-password-free-login
+   D) Suggest ssh password-free connect with the more remote machine
+      sshtools --more-password-free-login
+
+
+   Notice:
+      if you want to control more remote machines,you shoild write machines Information ( user ip password port )
+   into /etc/sshtools/sshtools.cfg,default sshtools tool will find this configuration file when you control more machines
+
+ 
+   Options:
+   -u                           Set the login user of the remote machine
+   -i                           Set the login ip of the remote machine
+   -p                           Set the login password of the remote machine
+   --check-single-ssh-open      Check the ssh service status of the single remote machine
+   --check-more-ssh-open        Check the ssh service status of the more remote machine
+   --single-password-free-login Suggest ssh password-free connect with the single remote machine
+   --more-password-free-login   Suggest ssh password-free connect with the more remote machine

@@ -1,0 +1,145 @@
+#! /bin/bash
+
+while [ "$1" != "" ]
+do
+  case $1 in
+    -u) USER=$2  ; shift;;
+    -i) IP=$2    ; shift;;
+    -p) MIMA=$2 ;  shift;;
+    -t) PORT=$2 ;  shift;;
+    --check-single-ssh-open) STATUS=CHECK_SINGLE_SSH_OPEN ; shift;;
+    --check-more-ssh-open)   STATUS=CHECK_MORE_SSH_OPEN   ; shift;;
+    --more-password-free-login)    STATUS=LOGIN_MORE_FREE       ; shift;;
+    --single-password-free-login)  STATUS=LOGIN_SIGIN_FREE      ; shift;; 
+    --help) STATUS=HELP ; shift;;    
+     *) echo  "unknown option $1" ;;
+  esac
+  shift
+done
+
+check_local_ssh (){
+    #check local machine ssh dir and file of id_rsa.pub
+    test -d ~/.ssh  || ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa 
+    test -f ~/.ssh/id_rsa.pub || ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa
+}
+
+#check remote ssh service open??
+remote_ssh_open_check (){
+      if  [ "$USER" != "" ] && [ "$IP" != "" ] && [ "$MIMA" != "" ] && [ "$PORT" == "" ] ;then
+          sshpass -p "${MIMA}"  ssh -o  StrictHostKeyChecking=no   ${USER}@${IP}  "ls ~/"  >/dev/null 2>&1
+          [ $? -eq 0 ] && echo -e  "\033[32m[INFO]: [$IP] SSH SERVICE HAS BEEN OPENED \033[0m" || \
+                          echo -e  "\033[31m[ERROR]: [$IP] SSH SERVICE NOT BEEN OPENED \033[0m"
+      elif [ "$USER" != "" ] && [ "$IP" != "" ] && [ "$MIMA" != "" ] && [ "$PORT" != "" ] ;then
+          sshpass -p "${MIMA}"  ssh -p "$PORT" -o  StrictHostKeyChecking=no   ${USER}@${IP}  "ls ~/"  >/dev/null 2>&1
+          [ $? -eq 0 ] && echo -e  "\033[32m[INFO]: [$IP] SSH SERVICE HAS BEEN OPENED \033[0m" || \
+                          echo -e  "\033[31m[ERROR]: [$IP] SSH SERVICE NOT BEEN OPENED \033[0m"
+      else
+          echo -e  "\033[31m[ERROR]: you must set Options: -u -i -p \033[0m" 
+      fi 
+}
+
+#traverse more remote machine info
+more_machine_info (){
+      cfg_nu=$(cat /etc/sshtools/sshtools.cfg | wc -l)
+      i=$(cat  /etc/sshtools/sshtools.cfg |  grep -n "begin" | sed -e "s#:# #" |  awk '{print $1}')
+      while [ $i -lt $cfg_nu ]
+      do
+          let i++
+          IP=$(cat /etc/sshtools/sshtools.cfg   | awk "NR == $i" | grep "ssh-way" | awk '{print $2}')
+          USER=$(cat /etc/sshtools/sshtools.cfg | awk "NR == $i" | grep "ssh-way" | awk '{print $3}')
+          MIMA=$(cat /etc/sshtools/sshtools.cfg | awk "NR == $i" | grep "ssh-way" | awk '{print $4}')
+          PORT=$(cat /etc/sshtools/sshtools.cfg | awk "NR == $i" | grep "ssh-way" | awk '{print $5}')
+          if [ "$STATUS" == "CHECK_MORE_SSH_OPEN" ];then
+              remote_ssh_open_check          
+          elif [ "$STATUS" == "LOGIN_MORE_FREE" ];then              
+              login_remote_ssh                  
+          fi        
+     done
+}
+
+#send id_rsa.pub for remote without port
+check_remote_ssh_noport (){
+     #check remote  ~/.ssh
+     sshpass -p ${MIMA}  ssh -o  StrictHostKeyChecking=no ${USER}@${IP} "test ! -d  ~/.ssh" > /dev/null 2>&1
+     [ $? -eq 0 ] && {
+     sshpass -p ${MIMA}  ssh-copy-id -i ~/.ssh/id_rsa.pub  ${USER}@${IP}  > /dev/null 2>&1
+     } || result_ssh=yes
+     #check remote ~/.ssh/authorized_key         
+     sshpass -p ${MIMA}  ssh -o  StrictHostKeyChecking=no ${USER}@${IP}  test ! -f  ~/.ssh/authorized_keys  > /dev/null 2>&1 && \
+                                                                                              result_authorized_keys=no 
+     if [ "$result_ssh" == "yes" ] && [ "$result_authorized_keys" == "no" ];then    
+         sshpass -p ${MIMA}  ssh-copy-id -i ~/.ssh/id_rsa.pub  ${USER}@${IP}  > /dev/null 2>&1
+     fi
+}
+
+#send id_rsa.pub for remote with port
+check_remote_ssh_port (){
+    #check remote  ~/.ssh
+    sshpass -p ${MIMA}  ssh -p "$PORT" -o  StrictHostKeyChecking=no ${USER}@${IP} "test ! -d  ~/.ssh" > /dev/null 2>&1
+    [ $? -eq 0 ] && {
+    sshpass -p ${MIMA}  ssh-copy-id -p "$PORT"  -i ~/.ssh/id_rsa.pub  ${USER}@${IP}  > /dev/null 2>&1
+    } || result_ssh=yes
+    #check remote ~/.ssh/authorized_key
+    sshpass -p ${MIMA}  ssh -p "$PORT"  -o  StrictHostKeyChecking=no ${USER}@${IP}  test ! -f  ~/.ssh/authorized_keys  > /dev/null 2>&1 && \
+                                                                                              result_authorized_keys=no
+    if [ "$result_ssh" == "yes" ] && [ "$result_authorized_keys" == "no" ];then
+        sshpass -p ${MIMA}  ssh-copy-id -p "$PORT"  -i ~/.ssh/id_rsa.pub  ${USER}@${IP} > /dev/null 2>&1
+    fi
+}
+
+#login remote machine by ssh way with no password
+login_remote_ssh (){
+   if  [ "$USER" != "" ] && [ "$IP" != "" ] && [ "$PORT" == "" ] && [ "$MIMA" != "" ];then
+       ssh  -o  StrictHostKeyChecking=no -o NumberOfPasswordPrompts=0  ${USER}@${IP} "df -h" > /dev/null 2>&1
+       if [ $? -eq 0 ];then
+           echo -e "\033[32m[INFO]: [$IP][$USER] ALREADY CAN CONNECT BY NOPASSWOERD \033[0m"
+       else
+           check_remote_ssh_noport
+           sleep 3
+           ssh  -o  StrictHostKeyChecking=no -o NumberOfPasswordPrompts=0  ${USER}@${IP} "df -h" > /dev/null 2>&1
+           [ $? -eq 0 ] && echo -e "\033[32m[INFO]: [$IP][$USER] SETTING OK , YOU CAN CONNECT BY NOPASSWOERD \033[0m" || \
+                           echo -e  "\033[31m[ERROR]: [$IP][$USER] CAN NOT CONNECT BY NOPASSWOERD\033[0m"
+          fi
+
+    elif [ "$USER" != "" ] && [ "$IP" != "" ] && [ "$PORT" != "" ]  && [ "$MIMA" != "" ];then
+        ssh -p "$PORT" -o  StrictHostKeyChecking=no -o NumberOfPasswordPrompts=0 ${USER}@${IP} "df -h" > /dev/null 2>&1
+        if [ $? -eq 0 ];then
+            echo -e "\033[32m[INFO]: [$IP][$USER] ALREADY CAN CONNECT BY NOPASSWOERD \033[0m"
+        else
+            check_remote_ssh_port
+            sleep 3
+            ssh -p "$PORT" -o  StrictHostKeyChecking=no -o NumberOfPasswordPrompts=0 ${USER}@${IP} "df -h" > /dev/null 2>&1
+            [ $? -eq 0 ] && echo -e "\033[32m[INFO]: [$IP][$USER] SETTING OK , YOU CAN CONNECT BY NOPASSWOERD \033[0m" || \
+                            echo -e  "\033[31m[ERROR]: [$IP][$USER] CAN NOT CONNECT BY NOPASSWOERD \033[0m"
+        fi
+
+     else
+          echo -e  "\033[31m[ERROR]: you must set options: -u -i -p  \033[0m"
+     fi
+}
+
+   #begin here
+   check_local_ssh
+
+   #Check whether the remote machine ssh servce open by check_single_ssh_open
+   if [ "$STATUS" == "CHECK_SINGLE_SSH_OPEN" ];then
+       remote_ssh_open_check
+   fi
+
+   #Check whether the remote machine ssh servce open by CHECK_MORE_SSH_OPEN
+   if [ "$STATUS" == "CHECK_MORE_SSH_OPEN" ];then
+       more_machine_info 
+   fi
+
+   #setting login remote by no password with single setting way
+   if [ "$STATUS" == "LOGIN_SIGIN_FREE" ];then
+       login_remote_ssh 
+   fi
+
+   #setting login remote by no password with more setting way
+   if [ "$STATUS" == "LOGIN_MORE_FREE" ];then
+       more_machine_info
+   fi
+
+   #show this tools help info for new user
+   [ "$STATUS" == "HELP" ] && cat /usr/share/sshtools/sshtools.help
