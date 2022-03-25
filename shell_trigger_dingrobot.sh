@@ -20,7 +20,7 @@ function run_ding (){
         'Content-Type: application/json' -d \
         '{"msgtype": "text",
            "at":{"isAtAll":true},
-           "text": { "content": "Hi~ ：各位同学，请及时填报工时!\https://github.com/zhiqifeiyang/daily/new/master\n" }
+           "text": { "content": "Hi~ ：show \https://github.com/zhiqifeiyang/daily/new/master\n" }
          }'
 }
 
